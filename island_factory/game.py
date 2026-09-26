@@ -7,6 +7,7 @@ refusal is what stops the machines upstream.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from island_factory.constants import (
@@ -116,6 +117,10 @@ class Tree:
     timer: float = 0.0
 
 
+def env_enabled(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class Stock:
     wood: int = 0
@@ -123,6 +128,7 @@ class Stock:
     iron: int = 0
     gold: int = 0
     tier: int = 0
+    unlimited_wood: bool = False
 
     def cap(self, resource: str) -> int:
         return CAPS[self.tier][resource]
@@ -139,17 +145,24 @@ class Stock:
         return take
 
     def can_pay(self, cost: dict[str, int]) -> bool:
-        return all(self.get(name) >= amount for name, amount in cost.items())
+        for name, amount in cost.items():
+            if name == WOOD and self.unlimited_wood:
+                continue
+            if self.get(name) < amount:
+                return False
+        return True
 
     def pay(self, cost: dict[str, int]) -> None:
         for name, amount in cost.items():
+            if name == WOOD and self.unlimited_wood:
+                continue
             setattr(self, name, self.get(name) - amount)
 
 
 class Game:
     def __init__(self) -> None:
         self.time = 0.0
-        self.stock = Stock()
+        self.stock = Stock(unlimited_wood=env_enabled("ISLAND_UNLIMITED_WOOD"))
         self.tools: list[Tool] = []
         self.queue: list[str] = []
         self.craft_t = 0.0
@@ -526,6 +539,9 @@ class Game:
             if machine.kind != GENERATOR or not machine.lit:
                 continue
             left = dt
+            if self.stock.unlimited_wood:
+                gen_seconds += dt
+                continue
             while left > 1e-9 and self.stock.wood > 0:
                 need = GEN_BURN_SECONDS - machine.burn
                 if need <= 1e-9:
@@ -766,8 +782,12 @@ class Game:
             return "A boat is at the north shore."
         generators = [m for m in self.machines.values() if m.kind == GENERATOR]
         if not generators:
+            if self.stock.unlimited_wood:
+                return "Wood is unlimited. Craft a generator and light it."
             return "Chop a western tree, drag the log to the stockpile, and craft a generator."
         if not any(machine.lit for machine in generators):
+            if self.stock.unlimited_wood:
+                return "Click the generator to light it. This fire does not burn logs."
             return "Click the generator to light it. It burns wood from the stockpile."
         if self.stock.tier < 1:
             return "Craft the copper bins, or the stockpile will refuse the metal."

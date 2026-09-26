@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 
 from island_factory.constants import (
@@ -155,6 +156,23 @@ class IslandTest(unittest.TestCase):
         self.assertEqual(game.tools[0].waste, 7)
         self.assertIsNone(game.place(0, 22, 20, 2))
         self.assertEqual(game.machines[(22, 20)].waste, 7)
+
+    def test_unlimited_wood_powers_a_fire_with_an_empty_pile(self) -> None:
+        os.environ["ISLAND_UNLIMITED_WOOD"] = "1"
+        try:
+            game = Game()
+            self.assertTrue(game.stock.unlimited_wood)
+            self.assertIsNone(game.enqueue("generator"))
+            self.assertEqual(game.stock.wood, 0)
+            game.tick(RECIPES["generator"].seconds + 0.01)
+            self.assertIsNone(game.place(0, 20, 20, 1))
+            game.machines[(20, 20)].lit = True
+            game.tick(5)
+            self.assertEqual(game.stock.wood, 0)
+            self.assertAlmostEqual(game.supply, 10, places=5)
+            self.assertFalse(game.brownout)
+        finally:
+            os.environ.pop("ISLAND_UNLIMITED_WOOD", None)
 
     def test_iron_every_second_sand_and_gold_every_fourth(self) -> None:
         self._assert_metals("iron_ext", [None, "iron"] * 3)

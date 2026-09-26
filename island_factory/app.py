@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pygame
 
 from island_factory.constants import (
@@ -789,7 +792,8 @@ class App:
         panel_x = self.win_w - PANEL_W
         self.screen.fill(PANEL, pygame.Rect(panel_x, 0, PANEL_W, self.win_h))
         self._text(self.large, "Island Factory", panel_x + 16, 14, INK)
-        self._text(self.small, "One island. No coins.", panel_x + 16, 46, DIM)
+        subtitle = "Test mode. Wood does not run out." if self.game.stock.unlimited_wood else "One island. No coins."
+        self._text(self.small, subtitle, panel_x + 16, 46, DIM)
         self._draw_power(panel_x)
         self._draw_resources(panel_x)
         self._text(self.small, "Tool pile", panel_x + 16, 196, DIM)
@@ -853,10 +857,14 @@ class App:
     def _draw_resources(self, panel_x: int) -> None:
         for index, resource in enumerate(RESOURCES):
             y = 120 + index * 18
-            have = self.game.stock.get(resource)
-            cap = self.game.stock.cap(resource)
-            shown = f"{have} / {cap}" if cap else "—"
-            color = INK if cap or resource == WOOD else DIM
+            if resource == WOOD and self.game.stock.unlimited_wood:
+                shown = "unlimited"
+                color = INK
+            else:
+                have = self.game.stock.get(resource)
+                cap = self.game.stock.cap(resource)
+                shown = f"{have} / {cap}" if cap else "—"
+                color = INK if cap or resource == WOOD else DIM
             self._text(self.small, f"{NAMES[resource]}   {shown}", panel_x + 28, y, color)
             pygame.draw.rect(self.screen, ITEM_COLOR.get(resource, DIM), pygame.Rect(panel_x + 16, y + 3, 8, 8))
 
@@ -890,5 +898,18 @@ class App:
 METAL_LETTER = {COPPER_EXT: "Cu", IRON_EXT: "Fe", GOLD_EXT: "Au"}
 
 
+def load_env_file(path) -> None:
+    """Fill in variables the shell did not already set. A real export wins."""
+    if not path.is_file():
+        return
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+
+
 def main() -> None:
+    load_env_file(Path(__file__).resolve().parent.parent / ".env")
     App().run()

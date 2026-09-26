@@ -10,6 +10,8 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+This folder's `.env` sets `ISLAND_UNLIMITED_WOOD=1`, so the panel shows "Wood unlimited" and fires do not burn logs. Metal still has to be belted. To play the real grove, change that line to `0`, or start with `ISLAND_UNLIMITED_WOOD=0 python main.py`.
+
 The checks under `tests/` do not open a window:
 
 ```bash

@@ -82,6 +82,7 @@ class Tool:
     kind: str
     charges: int = 1
     tier: int = 1
+    waste: int = 0
 
 
 @dataclass
@@ -353,6 +354,7 @@ class Game:
         if error:
             return error
         machine = self._add_machine(tool.kind, x, y, facing, tool.tier)
+        machine.waste = tool.waste
         if machine.kind == GENERATOR:
             machine.lit = False
         del self.tools[tool_index]
@@ -444,8 +446,6 @@ class Game:
             return "Take the item off the belt first."
         if machine.sand_in or machine.sand_out or machine.metal_out:
             return "That machine is still holding sand."
-        if machine.kind == DUMP and machine.waste:
-            return "Empty the dump first."
         del self.machines[(x, y)]
         error = (
             self._place_blocked_belt(nx, ny)
@@ -472,11 +472,9 @@ class Game:
             return self._pickup_belt(machine)
         if machine.belt_item or machine.sand_in or machine.sand_out or machine.metal_out:
             return "It is still holding something."
-        if machine.kind == DUMP and machine.waste:
-            return "Empty the dump first."
         if len(self.tools) >= TOOL_CAP:
             return "The tool pile is full."
-        self.tools.append(Tool(kind=machine.kind, charges=1, tier=machine.tier))
+        self.tools.append(Tool(kind=machine.kind, charges=1, tier=machine.tier, waste=machine.waste))
         del self.machines[(x, y)]
         return None
 
@@ -856,7 +854,7 @@ BLURBS = {
     COPPER_EXT: "Sand enters the back and leaves the front. Copper leaves on the right.",
     IRON_EXT: "Set it on the sand's path. Every second lump drops an iron bar to the right.",
     GOLD_EXT: "Set it after iron. Every fourth lump drops gold. Pause it when the vault is full.",
-    DUMP: "Point the waste belt into it. Click and hold to heave sand into the sea.",
+    DUMP: "Drag it to a new tile. The sand comes with it. Hold still on it to heave sand into the sea.",
     GENERATOR: "Place it, then click it. A lit fire burns one log every ten seconds.",
     BATTERY: "Stores spare watts and gives them back when a fire goes out.",
     ARM_MK2: "Drop onto an arm. It pulls twice as fast and draws more watts.",

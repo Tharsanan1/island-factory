@@ -359,7 +359,9 @@ class App:
 
     def _release_machine(self, pos: tuple[int, int]) -> None:
         assert self.move_from is not None
-        if self.dump_tile is not None and self.dump_hold > 0.18:
+        if self.dragged:
+            self.game.held_dump = None
+        elif self.dump_tile is not None and self.dump_hold > 0.18:
             return
         if not self.dragged:
             error = self.game.click_machine(*self.move_from)
@@ -385,9 +387,10 @@ class App:
             self.cam_x -= rel[0] / self.zoom
             self.cam_y -= rel[1] / self.zoom
             self.clamp_camera()
-        if self.press is not None and buttons[0]:
+        if self.press is not None:
             if abs(pos[0] - self.press[0]) + abs(pos[1] - self.press[1]) > 6:
                 self.dragged = True
+                self.game.held_dump = None
             if self.press_kind == "place" and self.belt_last is not None and self._armed_kind() == BELT:
                 tile = self.screen_to_tile(*pos)
                 if tile is not None:
@@ -421,13 +424,12 @@ class App:
         self.clamp_camera()
 
     def _dump_hold(self, dt: float) -> None:
-        if self.press_kind == "machine" and self.dump_tile is not None and not self.dragged:
-            self.dump_hold += dt
-            if self.dump_hold > 0.18:
-                self.game.held_dump = self.dump_tile
-                return
-        if self.press_kind != "machine":
+        if self.dragged or self.press_kind != "machine" or self.dump_tile is None:
             self.game.held_dump = None
+            return
+        self.dump_hold += dt
+        if self.dump_hold > 0.18:
+            self.game.held_dump = self.dump_tile
 
     def clamp_camera(self) -> None:
         view_w = max(200, self.win_w - PANEL_W)
@@ -538,11 +540,12 @@ class App:
         self._draw_castle(size)
         self._draw_pads(size)
         self._mark_input(size)
+        carried = self._carried_machine()
         for machine in game.machines.values():
-            if machine.kind == BELT:
+            if machine.kind == BELT and machine is not carried:
                 self._draw_machine(machine, size)
         for machine in game.machines.values():
-            if machine.kind != BELT:
+            if machine.kind != BELT and machine is not carried:
                 self._draw_machine(machine, size)
         for tree in game.trees.values():
             self._draw_tree(tree, size)
@@ -652,8 +655,13 @@ class App:
         pygame.draw.rect(self.screen, (96, 68, 42), pygame.Rect(cx - 2, cy, 4, size // 4))
         pygame.draw.circle(self.screen, (24, 92, 48), (cx, cy - size // 8), radius)
 
-    def _draw_machine(self, machine, size: int) -> None:
-        ox, oy = self.tile_origin(machine.x, machine.y)
+    def _carried_machine(self):
+        if self.press_kind == "machine" and self.dragged and self.move_from is not None:
+            return self.game.machines.get(self.move_from)
+        return None
+
+    def _draw_machine(self, machine, size: int, at: tuple[int, int] | None = None) -> None:
+        ox, oy = self.tile_origin(*(at or (machine.x, machine.y)))
         rect = pygame.Rect(int(ox) + 1, int(oy) + 1, max(1, size - 2), max(1, size - 2))
         color = MACHINE_COLOR.get(machine.kind, (80, 80, 80))
         if machine.kind == GENERATOR and machine.lit:
@@ -724,9 +732,10 @@ class App:
         if self.log_from is not None:
             pygame.draw.rect(self.screen, ITEM_COLOR[WOOD], pygame.Rect(mouse[0] - 10, mouse[1] - 6, 22, 10))
             return
+        carried = self._carried_machine()
         tile = self.screen_to_tile(*mouse)
-        if self.press_kind == "machine" and self.dragged and self.move_from and tile:
-            self._outline(tile, size, SELECT)
+        if carried is not None and tile is not None:
+            self._draw_machine(carried, size, at=tile)
             return
         if self.armed is None or tile is None:
             return

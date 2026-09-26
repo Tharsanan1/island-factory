@@ -143,6 +143,19 @@ class IslandTest(unittest.TestCase):
         # One lump lands on the belt. The full dump refuses it, so the arm waits.
         self.assertEqual(game.scar.get((35, 19), 0), 1)
 
+    def test_dump_can_be_moved_while_it_holds_sand(self) -> None:
+        game = Game()
+        game.stock.wood = 20
+        craft(game, "dump")
+        self.assertIsNone(game.place(0, 20, 20, 2))
+        game.machines[(20, 20)].waste = 7
+        self.assertIsNone(game.move_machine(20, 20, 21, 20, 2))
+        self.assertEqual(game.machines[(21, 20)].waste, 7)
+        self.assertIsNone(game.pickup(21, 20))
+        self.assertEqual(game.tools[0].waste, 7)
+        self.assertIsNone(game.place(0, 22, 20, 2))
+        self.assertEqual(game.machines[(22, 20)].waste, 7)
+
     def test_iron_every_second_sand_and_gold_every_fourth(self) -> None:
         self._assert_metals("iron_ext", [None, "iron"] * 3)
         self._assert_metals("gold_ext", [None, None, None, "gold", None, None, None, "gold"])

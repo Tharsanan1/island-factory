@@ -162,6 +162,8 @@ class App:
         self.dump_hold = 0.0
         self.hover = ""
         self.job_y = 300
+        self.selected: tuple[int, int] | None = None
+        self.pause_btn = pygame.Rect(0, 0, 0, 0)
         self.running = True
 
     def fit_camera(self) -> None:
@@ -191,7 +193,8 @@ class App:
 
     def layout(self) -> None:
         panel_x = self.win_w - PANEL_W
-        armed = self.armed is not None and self.armed < len(self.game.tools)
+        armed = self._armed_kind() is not None
+        turning = self._selected_machine() if not armed else None
         self.slots = []
         self.recipes = []
         self.speeds = []
@@ -201,13 +204,18 @@ class App:
             rect = pygame.Rect(panel_x + 16 + (index % 3) * 102, slot_y + (index // 3) * 36, 96, 32)
             self.slots.append(rect)
         self.tool_drop = pygame.Rect(panel_x + 12, 196, PANEL_W - 24, 92)
-        if armed:
+        if armed or turning is not None:
             self.rot_l = pygame.Rect(panel_x + 16, 352, 40, 28)
             self.rot_r = pygame.Rect(panel_x + 62, 352, 40, 28)
+            if turning is not None and turning.kind != BELT:
+                self.pause_btn = pygame.Rect(panel_x + 230, 352, 80, 28)
+            else:
+                self.pause_btn = pygame.Rect(0, 0, 0, 0)
             job_y = 390
         else:
             self.rot_l = pygame.Rect(0, 0, 0, 0)
             self.rot_r = pygame.Rect(0, 0, 0, 0)
+            self.pause_btn = pygame.Rect(0, 0, 0, 0)
             job_y = 300
         self.job_y = job_y
         clip_top = job_y + 52
@@ -260,6 +268,7 @@ class App:
     def _cancel(self) -> None:
         self.intro = False
         self.armed = None
+        self.selected = None
         self.belt_last = None
         self.log_from = None
         self.move_from = None
@@ -281,11 +290,17 @@ class App:
             self.armed = slot
             return
         if self.rot_l.collidepoint(pos):
-            self.facing = (self.facing - 1) % 4
+            self._turn(-1)
             self.press_kind = "ui"
             return
         if self.rot_r.collidepoint(pos):
-            self.facing = (self.facing + 1) % 4
+            self._turn(1)
+            self.press_kind = "ui"
+            return
+        if self.pause_btn.collidepoint(pos) and self.selected is not None:
+            error = self.game.click_machine(*self.selected)
+            if error:
+                self._toast(error)
             self.press_kind = "ui"
             return
         for rect, speed in self.speeds:
@@ -354,6 +369,8 @@ class App:
             self.belt_last = None
         elif kind == "machine" and self.move_from is not None:
             self._release_machine(pos)
+        elif kind == "world" and not self.dragged:
+            self.selected = None
         self.press_kind = None
         self.press = None
         self.dump_tile = None
@@ -367,6 +384,15 @@ class App:
         elif self.dump_tile is not None and self.dump_hold > 0.18:
             return
         if not self.dragged:
+            machine = self.game.machines.get(self.move_from)
+            if machine is not None and machine.kind in (BELT, ARM, *EXTRACTORS):
+                self.selected = self.move_from
+                error = self.game.rotate_machine(*self.move_from, 1)
+                if error:
+                    self._toast(error)
+                self.facing = machine.facing
+                return
+            self.selected = None
             error = self.game.click_machine(*self.move_from)
             if error:
                 self._toast(error)
@@ -382,6 +408,8 @@ class App:
         error = self.game.move_machine(self.move_from[0], self.move_from[1], tile[0], tile[1], self.facing)
         if error:
             self._toast(error)
+        elif self.selected == self.move_from:
+            self.selected = tile
 
     def _move(self, pos: tuple[int, int], buttons: tuple[int, ...], rel: tuple[int, int]) -> None:
         if buttons[2] and self.right_press is not None:
@@ -452,6 +480,24 @@ class App:
     def _toast(self, text: str) -> None:
         self.toast = text
         self.toast_t = 2.4
+
+    def _turn(self, delta: int) -> None:
+        if self._armed_kind() is not None:
+            self.facing = (self.facing + delta) % 4
+            return
+        if self.selected is None:
+            return
+        error = self.game.rotate_machine(self.selected[0], self.selected[1], delta)
+        if error:
+            self._toast(error)
+
+    def _selected_machine(self):
+        if self.selected is None:
+            return None
+        machine = self.game.machines.get(self.selected)
+        if machine is None or machine.kind not in (BELT, ARM, *EXTRACTORS):
+            return None
+        return machine
 
     def _armed_kind(self) -> str | None:
         if self.armed is None or self.armed >= len(self.game.tools):
@@ -552,6 +598,8 @@ class App:
                 self._draw_machine(machine, size)
         for tree in game.trees.values():
             self._draw_tree(tree, size)
+        if self._selected_machine() is not None and self.selected is not None:
+            self._outline(self.selected, size, SELECT)
         self._draw_ghost(size)
         self._draw_queen(size)
         if self.intro:
@@ -804,16 +852,25 @@ class App:
                 label = self.game.tool_label(self.game.tools[index])
                 self._text(self.small, label, rect.x + 6, rect.y + 8, INK if index != self.armed else (28, 24, 16))
         kind = self._armed_kind()
+        chosen = self._selected_machine()
         if kind is not None and self.armed is not None:
             self._text(self.font, self.game.tool_label(self.game.tools[self.armed]), panel_x + 16, 294, SELECT)
             blurb = wrap(self.game.blurb(kind), self.small, PANEL_W - 36)
             for index, line in enumerate(blurb[:2]):
                 self._text(self.small, line, panel_x + 16, 316 + index * 16, DIM)
-            pygame.draw.rect(self.screen, PANEL_2, self.rot_l)
-            pygame.draw.rect(self.screen, PANEL_2, self.rot_r)
-            self._text(self.font, "‹", self.rot_l.x + 14, self.rot_l.y + 2, INK)
-            self._text(self.font, "›", self.rot_r.x + 14, self.rot_r.y + 2, INK)
-            self._text(self.small, f"Facing {DIR_NAMES[self.facing]}", self.rot_r.right + 10, self.rot_r.y + 6, DIM)
+            self._draw_turn_buttons(DIR_NAMES[self.facing])
+        elif chosen is not None:
+            self._text(self.font, self.game.machine_label(chosen), panel_x + 16, 294, SELECT)
+            note = "Click again to turn it."
+            if chosen.kind != BELT:
+                note = "Copper leaves on the right." if chosen.kind == COPPER_EXT else "Click again to turn it."
+            self._text(self.small, note, panel_x + 16, 318, DIM)
+            self._draw_turn_buttons(DIR_NAMES[chosen.facing])
+            if self.pause_btn.width:
+                pygame.draw.rect(self.screen, PANEL_2, self.pause_btn)
+                word = "Run" if chosen.paused else "Pause"
+                label = self.small.render(word, True, INK)
+                self.screen.blit(label, (self.pause_btn.centerx - label.get_width() / 2, self.pause_btn.y + 6))
         self._draw_jobs(panel_x)
         previous = self.screen.get_clip()
         self.screen.set_clip(self.recipe_clip)
@@ -867,6 +924,13 @@ class App:
                 color = INK if cap or resource == WOOD else DIM
             self._text(self.small, f"{NAMES[resource]}   {shown}", panel_x + 28, y, color)
             pygame.draw.rect(self.screen, ITEM_COLOR.get(resource, DIM), pygame.Rect(panel_x + 16, y + 3, 8, 8))
+
+    def _draw_turn_buttons(self, facing_name: str) -> None:
+        pygame.draw.rect(self.screen, PANEL_2, self.rot_l)
+        pygame.draw.rect(self.screen, PANEL_2, self.rot_r)
+        self._text(self.font, "‹", self.rot_l.x + 14, self.rot_l.y + 2, INK)
+        self._text(self.font, "›", self.rot_r.x + 14, self.rot_r.y + 2, INK)
+        self._text(self.small, f"Facing {facing_name}", self.rot_r.right + 8, self.rot_r.y + 6, DIM)
 
     def _draw_jobs(self, panel_x: int) -> None:
         y = self.job_y

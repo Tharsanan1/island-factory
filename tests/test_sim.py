@@ -157,6 +157,19 @@ class IslandTest(unittest.TestCase):
         self.assertIsNone(game.place(0, 22, 20, 2))
         self.assertEqual(game.machines[(22, 20)].waste, 7)
 
+    def test_belt_and_extractor_turn_in_place(self) -> None:
+        game = Game()
+        game.stock.tier = 1
+        game.stock.wood = 40
+        craft(game, "belt")
+        craft(game, "copper_ext")
+        self.assertIsNone(game.place(0, 10, 10, 1))
+        self.assertIsNone(game.rotate_machine(10, 10, 1))
+        self.assertEqual(game.machines[(10, 10)].facing, 2)
+        self.assertIsNone(game.place(0, 12, 10, 1))
+        self.assertIsNone(game.rotate_machine(12, 10, -1))
+        self.assertEqual(game.machines[(12, 10)].facing, 0)
+
     def test_unlimited_wood_powers_a_fire_with_an_empty_pile(self) -> None:
         os.environ["ISLAND_UNLIMITED_WOOD"] = "1"
         try:

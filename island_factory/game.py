@@ -505,6 +505,23 @@ class Game:
         del self.machines[(machine.x, machine.y)]
         return None
 
+    def rotate_machine(self, x: int, y: int, turns: int = 1) -> str | None:
+        machine = self.machines.get((x, y))
+        if machine is None:
+            return "Nothing there."
+        if machine.kind not in (BELT, ARM, *EXTRACTORS):
+            return "That one does not turn."
+        if machine.kind == ARM:
+            facing = machine.facing
+            for _ in range(3):
+                facing = (facing + turns) % 4
+                if self._machine_error(ARM, x, y, facing, ignore=(x, y)) is None:
+                    machine.facing = facing
+                    return None
+            return "The arm has to face a sand tile."
+        machine.facing = (machine.facing + turns) % 4
+        return None
+
     def click_machine(self, x: int, y: int) -> str | None:
         machine = self.machines.get((x, y))
         if machine is None or machine.kind == BELT:
@@ -869,11 +886,11 @@ class Game:
 
 
 BLURBS = {
-    BELT: "Drag a path over grass. Items travel the way the belt faces.",
+    BELT: "Drag a path over grass. Click a belt that is already down to turn it.",
     ARM: "Face it into sand. A belt on the back catches what it pulls.",
-    COPPER_EXT: "Sand enters the back and leaves the front. Copper leaves on the right.",
-    IRON_EXT: "Set it on the sand's path. Every second lump drops an iron bar to the right.",
-    GOLD_EXT: "Set it after iron. Every fourth lump drops gold. Pause it when the vault is full.",
+    COPPER_EXT: "Click it to turn it. Sand leaves the front. Copper leaves on the right.",
+    IRON_EXT: "Click it to turn it. Every second lump drops an iron bar to the right.",
+    GOLD_EXT: "Click it to turn it. Every fourth lump drops gold on the right.",
     DUMP: "Drag it to a new tile. The sand comes with it. Hold still on it to heave sand into the sea.",
     GENERATOR: "Place it, then click it. A lit fire burns one log every ten seconds.",
     BATTERY: "Stores spare watts and gives them back when a fire goes out.",

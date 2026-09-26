@@ -24,7 +24,8 @@ You are not on the island. The mouse is your hands.
 
 - Click a tree and wait. Drag the log onto the stockpile, or onto the wood line in the panel.
 - Order a job from the list. It lands on the tool pile. Click it, turn it with the arrows, then click the grass.
-- Belts are drawn by dragging. Click a belt, or the copper extractor, to turn it after it is down. Copper leaves on the extractor's right.
+- Belt spools stack in one tool-pile slot, so a long drag keeps spending that stack.
+- Click a belt, arm, or extractor to turn it. Drag a box around several, then press N, E, S, or W to aim them together. Shift-click adds one more. Metal leaves on the extractor's right.
 - Click a generator to light it. Click any other machine to pause it. Hold a dump to heave sand into the sea.
 - Drag a machine onto the tool pile to pick it up.
 - Right-drag pans. The wheel zooms. Escape puts down whatever you are holding. The 1× 2× 4× buttons speed the island up.

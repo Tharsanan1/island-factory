@@ -157,6 +157,23 @@ class IslandTest(unittest.TestCase):
         self.assertIsNone(game.place(0, 22, 20, 2))
         self.assertEqual(game.machines[(22, 20)].waste, 7)
 
+    def test_belt_spools_stack_and_selection_can_be_aimed(self) -> None:
+        game = Game()
+        game.stock.wood = 30
+        craft(game, "belt")
+        craft(game, "belt")
+        belts = [tool for tool in game.tools if tool.kind == BELT]
+        self.assertEqual(len(belts), 1)
+        self.assertEqual(belts[0].charges, 16)
+        game.tools.extend([Tool(kind="generator") for _ in range(5)])
+        self.assertIsNone(game.enqueue("belt"))
+        game.tick(RECIPES["belt"].seconds + 0.01)
+        self.assertEqual(len([tool for tool in game.tools if tool.kind == BELT]), 1)
+        self.assertEqual(next(tool.charges for tool in game.tools if tool.kind == BELT), 24)
+        self.assertIsNone(game.place(0, 10, 10, 1))
+        self.assertIsNone(game.set_facing(10, 10, 3))
+        self.assertEqual(game.machines[(10, 10)].facing, 3)
+
     def test_belt_and_extractor_turn_in_place(self) -> None:
         game = Game()
         game.stock.tier = 1

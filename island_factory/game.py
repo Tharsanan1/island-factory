@@ -303,8 +303,10 @@ class Game:
             return "The workshop already has three jobs."
         if not self.stock.can_pay(recipe.cost):
             return "Not enough in the stockpile."
-        pending = sum(1 for rid in self.queue if RECIPES[rid].tool_kind)
-        if recipe.tool_kind and len(self.tools) + pending >= TOOL_CAP:
+        pending = sum(
+            1 for index, rid in enumerate(self.queue) if self._needs_new_slot(RECIPES[rid], index)
+        )
+        if self._needs_new_slot(recipe, None) and len(self.tools) + pending >= TOOL_CAP:
             return "The tool pile is full."
         self.stock.pay(recipe.cost)
         self.queue.append(recipe_id)
@@ -315,7 +317,7 @@ class Game:
             self.craft_t = 0.0
             return
         recipe = RECIPES[self.queue[0]]
-        if recipe.tool_kind and len(self.tools) >= TOOL_CAP:
+        if self._needs_new_slot(recipe, 0) and len(self.tools) >= TOOL_CAP:
             return
         self.craft_t += dt
         if self.craft_t < recipe.seconds:
@@ -326,7 +328,39 @@ class Game:
             self.stock.tier = max(self.stock.tier, recipe.stock_tier)
             return
         assert recipe.tool_kind is not None
+        if recipe.tool_kind == BELT:
+            self.add_belts(recipe.charges)
+            return
         self.tools.append(Tool(kind=recipe.tool_kind, charges=recipe.charges))
+
+    def _needs_new_slot(self, recipe: Recipe, queue_index: int | None) -> bool:
+        if recipe.tool_kind is None:
+            return False
+        if recipe.tool_kind != BELT:
+            return True
+        if any(tool.kind == BELT for tool in self.tools):
+            return False
+        earlier = self.queue if queue_index is None else self.queue[:queue_index]
+        return not any(RECIPES[rid].tool_kind == BELT for rid in earlier)
+
+    def add_belts(self, charges: int) -> None:
+        for tool in self.tools:
+            if tool.kind == BELT:
+                tool.charges += charges
+                self.consolidate_belts()
+                return
+        self.tools.append(Tool(kind=BELT, charges=charges))
+
+    def consolidate_belts(self) -> int | None:
+        indexes = [index for index, tool in enumerate(self.tools) if tool.kind == BELT]
+        if not indexes:
+            return None
+        total = sum(self.tools[index].charges for index in indexes)
+        keep = indexes[0]
+        self.tools[keep].charges = total
+        for index in reversed(indexes[1:]):
+            del self.tools[index]
+        return keep
 
     # --- placement -------------------------------------------------------
 
@@ -494,15 +528,10 @@ class Game:
     def _pickup_belt(self, machine: Machine) -> str | None:
         if machine.belt_item:
             return "Take the item off the belt first."
-        for tool in self.tools:
-            if tool.kind == BELT and tool.charges < 8:
-                tool.charges += 1
-                del self.machines[(machine.x, machine.y)]
-                return None
-        if len(self.tools) >= TOOL_CAP:
+        if len(self.tools) >= TOOL_CAP and not any(tool.kind == BELT for tool in self.tools):
             return "The tool pile is full."
-        self.tools.append(Tool(kind=BELT, charges=1))
         del self.machines[(machine.x, machine.y)]
+        self.add_belts(1)
         return None
 
     def rotate_machine(self, x: int, y: int, turns: int = 1) -> str | None:
@@ -520,6 +549,20 @@ class Game:
                     return None
             return "The arm has to face a sand tile."
         machine.facing = (machine.facing + turns) % 4
+        return None
+
+    def set_facing(self, x: int, y: int, facing: int) -> str | None:
+        machine = self.machines.get((x, y))
+        if machine is None:
+            return "Nothing there."
+        if machine.kind not in (BELT, ARM, *EXTRACTORS):
+            return "That one does not turn."
+        facing %= 4
+        if machine.kind == ARM:
+            error = self._machine_error(ARM, x, y, facing, ignore=(x, y))
+            if error:
+                return error
+        machine.facing = facing
         return None
 
     def click_machine(self, x: int, y: int) -> str | None:
@@ -886,7 +929,7 @@ class Game:
 
 
 BLURBS = {
-    BELT: "Drag a path over grass. Click a belt that is already down to turn it.",
+    BELT: "One stack in the pile. Drag a long path. Click a belt, or drag a box around many, to aim them.",
     ARM: "Face it into sand. A belt on the back catches what it pulls.",
     COPPER_EXT: "Click it to turn it. Sand leaves the front. Copper leaves on the right.",
     IRON_EXT: "Click it to turn it. Every second lump drops an iron bar to the right.",

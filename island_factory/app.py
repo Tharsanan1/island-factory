@@ -127,6 +127,7 @@ class App:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("helveticaneue", 16)
         self.small = pygame.font.SysFont("helveticaneue", 13)
+        self.tiny = pygame.font.SysFont("helveticaneue", 11)
         self.large = pygame.font.SysFont("helveticaneue", 26)
         self.zoom = 1.0
         self.cam_x = 0.0
@@ -812,12 +813,16 @@ class App:
             return
         if machine.kind == ARM:
             self._arrow(machine.facing, ox, oy, size, SELECT)
+            self._side_chip("sand", machine.facing, ox, oy, size, SAND_C)
+            self._side_chip("out", opposite(machine.facing), ox, oy, size, SELECT)
         if machine.kind in EXTRACTORS:
-            self._port(opposite(machine.facing), ox, oy, size, (70, 60, 52))
-            self._port(machine.facing, ox, oy, size, SAND_C)
             metal = METAL_OF[machine.kind]
+            self._port(opposite(machine.facing), ox, oy, size, (90, 78, 62))
+            self._port(machine.facing, ox, oy, size, SAND_C)
             self._port(right_hand(machine.facing), ox, oy, size, ITEM_COLOR[metal])
-            self._center_text(METAL_LETTER[machine.kind], ox, oy, size)
+            self._side_chip("in", opposite(machine.facing), ox, oy, size, (196, 176, 140))
+            self._side_chip("sand", machine.facing, ox, oy, size, SAND_C)
+            self._side_chip(METAL_LETTER[machine.kind], right_hand(machine.facing), ox, oy, size, ITEM_COLOR[metal])
         if machine.kind == DUMP:
             frac = machine.waste / self.game.dump_cap(machine)
             inner = pygame.Rect(int(ox) + 4, int(oy) + 4, max(1, size - 8), max(1, int((size - 8) * frac)))
@@ -828,6 +833,18 @@ class App:
             self.screen.fill(GOOD, pygame.Rect(int(ox) + 4, int(oy) + size - 4 - inner_h, max(1, size - 8), inner_h))
         if machine.paused:
             pygame.draw.line(self.screen, INK, (ox + 4, oy + 4), (ox + size - 4, oy + size - 4), 1)
+
+    def _side_chip(self, text: str, facing: int, ox: float, oy: float, size: int, color: tuple[int, int, int]) -> None:
+        label = self.tiny.render(text, True, (24, 20, 14))
+        dx, dy = DIRS[facing]
+        center = (
+            ox + size / 2 + dx * (size * 0.62),
+            oy + size / 2 + dy * (size * 0.62),
+        )
+        rect = label.get_rect(center=(int(center[0]), int(center[1])))
+        rect.inflate_ip(6, 2)
+        self.screen.fill(color, rect)
+        self.screen.blit(label, (rect.x + 3, rect.y + 1))
 
     def _port(self, facing: int, ox: float, oy: float, size: int, color: tuple[int, int, int]) -> None:
         thickness = max(3, size // 7)
@@ -951,7 +968,10 @@ class App:
                 shared = {machine.facing for machine in chosen}
                 facing_name = DIR_NAMES[next(iter(shared))] if len(shared) == 1 else "mixed"
             self._text(self.font, title, panel_x + 16, 292, SELECT)
-            self._text(self.small, "N E S W aims them. Metal leaves on the right.", panel_x + 16, 316, DIM)
+            note = "N E S W aims them. Metal leaves on the right."
+            if len(chosen) == 1 and chosen[0].kind in (ARM, *EXTRACTORS):
+                note = self.game.machine_label(chosen[0])
+            self._text(self.small, note, panel_x + 16, 316, DIM)
             self._draw_turn_buttons(facing_name)
             if self.pause_btn.width:
                 pygame.draw.rect(self.screen, PANEL_2, self.pause_btn)

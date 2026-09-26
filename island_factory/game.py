@@ -910,8 +910,16 @@ class Game:
             return name + ", paused"
         if machine.kind == DUMP:
             return f"{name}, {machine.waste}/{self.dump_cap(machine)}"
-        if machine.kind in EXTRACTORS or machine.kind == ARM:
-            return f"{name}, facing {DIR_NAMES[machine.facing]}"
+        if machine.kind == ARM:
+            front = DIR_NAMES[machine.facing]
+            back = DIR_NAMES[opposite(machine.facing)]
+            return f"Arm takes sand from the {front}. The belt goes on the {back}."
+        if machine.kind in EXTRACTORS:
+            back = DIR_NAMES[opposite(machine.facing)]
+            front = DIR_NAMES[machine.facing]
+            right = DIR_NAMES[right_hand(machine.facing)]
+            metal = {COPPER_EXT: "Copper", IRON_EXT: "Iron", GOLD_EXT: "Gold"}[machine.kind]
+            return f"Sand in from the {back}. Sand out to the {front}. {metal} out to the {right}."
         if machine.kind == BELT:
             carried = NAMES.get(machine.belt_item or "", "empty")
             return f"Belt {DIR_NAMES[machine.facing]}, {carried}"
